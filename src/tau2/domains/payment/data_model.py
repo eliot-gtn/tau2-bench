@@ -8,16 +8,6 @@ from tau2.domains.healthcare.utils import HEALTHCARE_DB_PATH
 from tau2.environment.db import DB
 
 # Type definitions
-AppointmentType = Literal["routine_checkup", "follow_up", "urgent_care", "specialist"]
-AppointmentStatus = Literal["scheduled", "completed", "cancelled", "no_show"]
-InsuranceProvider = Literal["BlueCross", "Aetna", "UnitedHealth", "Medicare", "Medicaid", "SelfPay"]
-PrescriptionStatus = Literal["active", "expired", "refill_needed", "discontinued"]
-TestResultStatus = Literal["pending", "ready", "reviewed"]
-ConditionSeverity = Literal["mild", "moderate", "severe"]
-MedicationRoute = Literal["oral", "injection", "topical", "inhaled"]
-AllergySeverity = Literal["mild", "moderate", "severe", "life_threatening"]
-LabResultStatus = Literal["pending", "resulted", "reviewed"]
-Priority = Literal["routine", "urgent", "stat"]
 
 
 class Name(BaseModel):
@@ -66,14 +56,32 @@ class Order(BaseModel):
     created_at: str = Field(description="Order timestamp in YYYY-MM-DD HH:MM:SS format")
     description: str = Field(description="What the order was for")
 
+class Installment(BaseModel):
+    """Installment information."""
+    installment_id: str = Field(description="Unique installment identifier")
+    order_fk: str = Field(description="Order identifier")
+    amount: int = Field(description="Installment amount in dollars")
+    status: Literal["pending", "paid", "cancelled"] = Field(description="Installment status")
+    created_at: str = Field(description="Installment timestamp in YYYY-MM-DD HH:MM:SS format")
+    updated_at: str = Field(description="Installment timestamp in YYYY-MM-DD HH:MM:SS format")
+
+class Card(BaseModel):
+    """Card information."""
+    card_id: str = Field(description="Unique card identifier")
+    customer_fk: str = Field(description="Customer ID")
+    card_number: str = Field(description="Last 4 digits of Card number")
+    card_type: Literal["credit", "debit"] = Field(description="Card type")
+    created_at: str = Field(description="Card timestamp in YYYY-MM-DD HH:MM:SS format")
+    updated_at: str = Field(description="Card timestamp in YYYY-MM-DD HH:MM:SS format")
+
 class PaymentDB(DB):
     """
     Main database for the payment domain.
     Contains all customers, orders, installments, cards, and payments.
     """
-    customers: Dict[str, customers] = Field(
+    customers: Dict[str, Customer] = Field(
         default_factory=dict,
-        description="Dictionary of patients keyed by patient_id"
+        description="Dictionary of customers keyed by customer_id"
     )
     payments: Dict[str, Payment] = Field(
         default_factory=dict,
