@@ -109,34 +109,13 @@ class PaymentDB(DB):
 # Export types for convenience
 __all__ = [
     # Main models
-    "Patient",
-    "Doctor",
-    "Appointment",
-    "Prescription",
-    "TestResult",
+    "Customer",
     "Payment",
-    "HealthcareDB",
-    # New medical models
-    "MedicalCondition",
-    "Medication",
-    "Allergy",
-    "VitalSigns",
-    "LabResult",
-    "LabOrder",
-    "EmergencyTransfer",
+    "Order",
+    "Installment",
+    "Card",
+    "PaymentDB",
     # Type definitions
-    "AppointmentType",
-    "AppointmentStatus",
-    "InsuranceProvider",
-    "PrescriptionStatus",
-    "TestResultStatus",
-    "ConditionSeverity",
-    "MedicationRoute",
-    "AllergySeverity",
-    "LabResultStatus",
-    "Priority",
-    # Supporting classes
     "Name",
-    "InsurancePlan",
     "ContactInfo",
 ]
