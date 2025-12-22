@@ -3,3 +3,5 @@ Objective:
 
 We will mimic the telecom domain.
 
+CompanyDB:
+- includes many tables: customers, orders, instalments, payments, cards.
