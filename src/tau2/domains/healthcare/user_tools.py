@@ -1,5 +1,3 @@
-"""Toolkit for the healthcare system (Patient/User-side tools)."""
-
 from typing import List, Optional
 
 from loguru import logger
@@ -16,10 +14,7 @@ from tau2.environment.toolkit import ToolKitBase, ToolType, is_tool
 
 
 class HealthcareUserTools(ToolKitBase):
-    """
-    Tools available to the patient during interaction with the healthcare agent.
-    These simulate physical actions the patient can take (checking cards, measuring temperature, etc.)
-    """
+    """Patient-accessible tools for healthcare interactions."""
 
     db: HealthcareUserDB
 
@@ -28,12 +23,12 @@ class HealthcareUserTools(ToolKitBase):
 
     @property
     def device(self):
-        """Returns the patient's device/physical items."""
+        """Patient device."""
         return self.db.patient_device
 
     @property
     def surroundings(self):
-        """Returns the patient's surroundings/context."""
+        """Patient surroundings."""
         return self.db.surroundings
 
     @is_tool(ToolType.READ)
@@ -54,7 +49,9 @@ Policy Number: {card.policy_number}
 Group Number: {card.group_number}
 Copay Info: {card.copay_info}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
-        logger.info(f"Patient checked insurance card: {card.provider} - {card.policy_number}")
+        logger.info(
+            f"Patient checked insurance card: {card.provider} - {card.policy_number}"
+        )
         return result
 
     @is_tool(ToolType.READ)
@@ -77,7 +74,9 @@ Copay Info: {card.copay_info}
             result += f"   Duration: {symptom.duration}\n"
         result += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-        logger.info(f"Patient checked symptoms: {len(self.device.current_symptoms)} symptoms")
+        logger.info(
+            f"Patient checked symptoms: {len(self.device.current_symptoms)} symptoms"
+        )
         return result
 
     @is_tool(ToolType.READ)
@@ -93,7 +92,6 @@ Copay Info: {card.copay_info}
         if temp is None:
             return "You don't have a thermometer available to check your temperature."
 
-        # Provide context about the reading
         if temp < 97.0:
             status = "below normal (hypothermia concern)"
         elif temp < 99.0:
@@ -124,19 +122,20 @@ Copay Info: {card.copay_info}
         if not self.device.medications_at_home:
             return "You don't have any medication bottles at home."
 
-        # If specific medication requested, find it
         if medication_name:
             for med in self.device.medications_at_home:
                 if medication_name.lower() in med.medication_name.lower():
                     return self._format_medication_bottle(med)
-            return f"You don't have a medication bottle for '{medication_name}' at home."
+            return (
+                f"You don't have a medication bottle for '{medication_name}' at home."
+            )
 
-        # Otherwise, show all medications
         if len(self.device.medications_at_home) == 1:
             return self._format_medication_bottle(self.device.medications_at_home[0])
 
-        # Multiple medications - list them
-        result = f"You have {len(self.device.medications_at_home)} medication bottles:\n"
+        result = (
+            f"You have {len(self.device.medications_at_home)} medication bottles:\n"
+        )
         for i, med in enumerate(self.device.medications_at_home, 1):
             result += f"{i}. {med.medication_name} - {med.dosage}\n"
         result += "\nSpecify which medication you want to check for full details."
@@ -173,7 +172,6 @@ Pharmacy Phone: {med.pharmacy_phone}
             return "Your calendar is empty - you have no scheduled conflicts."
 
         if date:
-            # Filter to specific date
             slots = [s for s in self.device.calendar_availability if s.date == date]
             if not slots:
                 return f"You have no conflicts on {date} - completely available."
@@ -185,11 +183,9 @@ Pharmacy Phone: {med.pharmacy_phone}
                 result += f"{slot.time}: {status}\n"
             return result
 
-        # Show all availability
         result = "Your Calendar Availability:\n"
         result += "━━━━━━━━━━━━━━━━��━━━━━━━━━━━━━━━━━━━━\n"
 
-        # Group by date
         dates = {}
         for slot in self.device.calendar_availability:
             if slot.date not in dates:
@@ -215,7 +211,9 @@ Pharmacy Phone: {med.pharmacy_phone}
             Summary of information available in your patient portal
         """
         if not self.surroundings.has_internet_access:
-            return "You don't have internet access right now to open the patient portal."
+            return (
+                "You don't have internet access right now to open the patient portal."
+            )
 
         portal = self.device.portal_info
         if not portal:
@@ -225,40 +223,37 @@ Pharmacy Phone: {med.pharmacy_phone}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
-        # Upcoming appointments
         if portal.upcoming_appointments:
-            result += f"\n📅 Upcoming Appointments ({len(portal.upcoming_appointments)}):\n"
+            result += (
+                f"\n📅 Upcoming Appointments ({len(portal.upcoming_appointments)}):\n"
+            )
             for apt in portal.upcoming_appointments:
                 result += f"  • {apt}\n"
         else:
             result += "\n📅 Upcoming Appointments: None scheduled\n"
 
-        # Recent visits
         if portal.recent_visits:
             result += f"\n🏥 Recent Visits ({len(portal.recent_visits)}):\n"
             for visit in portal.recent_visits:
                 result += f"  • {visit}\n"
 
-        # Test results
         if portal.test_results_available and portal.test_results:
             result += f"\n🔬 Test Results ({len(portal.test_results)} available):\n"
             for test in portal.test_results:
                 result += f"  • {test['test_name']} ({test['test_date']})\n"
                 result += f"    Result: {test['result']}\n"
-                if test.get('notes'):
+                if test.get("notes"):
                     result += f"    Notes: {test['notes']}\n"
         elif portal.test_results_available:
             result += "\n🔬 Test Results: ✓ New results available to view\n"
         else:
             result += "\n🔬 Test Results: No new results\n"
 
-        # Messages
         if portal.messages_count > 0:
             result += f"\n✉️  Messages: {portal.messages_count} unread message(s)\n"
         else:
             result += "\n✉️  Messages: No new messages\n"
 
-        # Billing
         if portal.outstanding_balance > 0:
             result += f"\n💰 Outstanding Balance: ${portal.outstanding_balance}\n"
         else:
@@ -278,13 +273,12 @@ Pharmacy Phone: {med.pharmacy_phone}
         Returns:
             Your full name and date of birth
         """
-        # Format date of birth in a user-friendly way
         from datetime import datetime
+
         try:
             dob = datetime.strptime(self.surroundings.date_of_birth, "%Y-%m-%d")
             formatted_dob = dob.strftime("%B %d, %Y")
-        except:
-            # If parsing fails, use the original format
+        except (ValueError, TypeError):
             formatted_dob = self.surroundings.date_of_birth
 
         result = f"""Identity Verification:
@@ -308,7 +302,6 @@ Date of Birth: {formatted_dob}
         Returns:
             Payment confirmation
         """
-        # Check if payment method is available
         if payment_method not in self.surroundings.payment_methods_available:
             available = ", ".join(self.surroundings.payment_methods_available)
             return f"You don't have {payment_method} available. You can pay with: {available}"
@@ -316,7 +309,7 @@ Date of Birth: {formatted_dob}
         result = f"""Payment Confirmation:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Amount Paid: ${amount}
-Payment Method: {payment_method.replace('_', ' ').title()}
+Payment Method: {payment_method.replace("_", " ").title()}
 Status: ✓ APPROVED
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Thank you for your payment!"""
@@ -324,15 +317,10 @@ Thank you for your payment!"""
         logger.info(f"Patient made payment: ${amount} via {payment_method}")
         return result
 
-    # ============================================================================
-    # TIER 1 & 2 WRITE TOOLS - Patient actions that modify state
-    # ============================================================================
-
     @is_tool(ToolType.WRITE)
     def confirm_appointment(self, appointment_id: str) -> str:
         """
         Confirm that you will attend a scheduled appointment.
-        Healthcare providers typically require confirmation 24-48 hours in advance.
 
         Args:
             appointment_id: The appointment ID to confirm
@@ -357,7 +345,6 @@ Thank you for confirming. We'll see you at your scheduled time!"""
     def provide_consent(self, consent_type: str) -> str:
         """
         Provide consent for treatment, procedures, or data sharing.
-        Required for telehealth, certain treatments, and sharing medical information.
 
         Args:
             consent_type: Type of consent (e.g., "telehealth", "treatment", "data_sharing", "billing")
@@ -383,7 +370,6 @@ Your consent has been recorded and is now active."""
     def acknowledge_instructions(self, instruction_type: str) -> str:
         """
         Acknowledge that you understand and will follow medical instructions.
-        Important for medication compliance, pre-surgery prep, and post-care instructions.
 
         Args:
             instruction_type: Type of instructions (e.g., "medication", "pre_surgery", "post_care", "diet")
@@ -409,7 +395,6 @@ Please follow them as directed by your healthcare provider."""
     def update_emergency_contact(self, name: str, phone: str, relationship: str) -> str:
         """
         Update your emergency contact information on file.
-        This person will be contacted in case of medical emergency.
 
         Args:
             name: Emergency contact's full name
@@ -422,9 +407,7 @@ Please follow them as directed by your healthcare provider."""
         from tau2.domains.healthcare.user_data_model import EmergencyContact
 
         self.surroundings.emergency_contact = EmergencyContact(
-            name=name,
-            phone=phone,
-            relationship=relationship
+            name=name, phone=phone, relationship=relationship
         )
         logger.info(f"Patient updated emergency contact: {name} ({relationship})")
 
@@ -441,7 +424,6 @@ Your emergency contact information has been updated."""
     def enable_notification_preference(self, notification_type: str) -> str:
         """
         Enable appointment reminders, test result alerts, or prescription refill reminders.
-        You can choose to receive notifications via text, email, or phone call.
 
         Args:
             notification_type: Type of notification ("appointment_reminders", "test_results",
@@ -464,10 +446,11 @@ Status: ✓ ENABLED
 You will now receive {notification_type} notifications."""
 
     @is_tool(ToolType.WRITE)
-    def authorize_pharmacy_transfer(self, medication_name: str, new_pharmacy: str) -> str:
+    def authorize_pharmacy_transfer(
+        self, medication_name: str, new_pharmacy: str
+    ) -> str:
         """
         Authorize transferring a prescription to a different pharmacy.
-        Common when you move, change insurance, or prefer a different location.
 
         Args:
             medication_name: Name of the medication to transfer
@@ -479,11 +462,13 @@ You will now receive {notification_type} notifications."""
         transfer_request = {
             "medication_name": medication_name,
             "new_pharmacy": new_pharmacy,
-            "requested_date": self._get_current_date()
+            "requested_date": self._get_current_date(),
         }
 
         self.device.pharmacy_transfer_requests.append(transfer_request)
-        logger.info(f"Patient requested pharmacy transfer: {medication_name} to {new_pharmacy}")
+        logger.info(
+            f"Patient requested pharmacy transfer: {medication_name} to {new_pharmacy}"
+        )
 
         return f"""Pharmacy Transfer Request:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -498,6 +483,7 @@ This typically takes 1-2 business days."""
     def _get_current_date(self) -> str:
         """Helper to get current date for confirmations."""
         from datetime import datetime
+
         return datetime.now().strftime("%Y-%m-%d")
 
     # ============================================================================
@@ -560,7 +546,9 @@ This typically takes 1-2 business days."""
     def add_symptom(self, description: str, severity: str, duration: str) -> None:
         """Add a symptom the patient is experiencing."""
         symptom = Symptom(
-            description=description, severity=severity, duration=duration  # type: ignore
+            description=description,
+            severity=severity,
+            duration=duration,  # type: ignore
         )
         self.device.current_symptoms.append(symptom)
         logger.info(f"Added symptom: {description} ({severity})")
@@ -576,7 +564,9 @@ This typically takes 1-2 business days."""
         """Add a time slot to the patient's calendar."""
         slot = TimeSlot(date=date, time=time, available=available, reason=reason)
         self.device.calendar_availability.append(slot)
-        logger.info(f"Added calendar slot: {date} {time} - {'Available' if available else 'Busy'}")
+        logger.info(
+            f"Added calendar slot: {date} {time} - {'Available' if available else 'Busy'}"
+        )
 
     def set_portal_info(
         self,
@@ -605,18 +595,21 @@ This typically takes 1-2 business days."""
         self.device.has_blood_pressure_monitor = has_monitor
         if has_monitor:
             self.device.latest_bp_reading = BloodPressureReading(
-                systolic=systolic,
-                diastolic=diastolic
+                systolic=systolic, diastolic=diastolic
             )
             logger.info(f"Set BP monitor: {systolic}/{diastolic} mmHg")
 
-    def set_glucose_monitor(self, has_monitor: bool, glucose_reading: int, measurement_time: str) -> None:
+    def set_glucose_monitor(
+        self, has_monitor: bool, glucose_reading: int, measurement_time: str
+    ) -> None:
         """Set glucose meter and reading."""
         self.device.has_glucose_meter = has_monitor
         if has_monitor:
             self.device.latest_glucose_reading = glucose_reading
             self.device.glucose_measurement_time = measurement_time
-            logger.info(f"Set glucose monitor: {glucose_reading} mg/dL ({measurement_time})")
+            logger.info(
+                f"Set glucose monitor: {glucose_reading} mg/dL ({measurement_time})"
+            )
 
     def set_pulse_oximeter(self, has_monitor: bool, spo2: int, heart_rate: int) -> None:
         """Set pulse oximeter and reading."""
@@ -631,9 +624,7 @@ This typically takes 1-2 business days."""
         from tau2.domains.healthcare.user_data_model import EmergencyContact
 
         self.surroundings.emergency_contact = EmergencyContact(
-            name=name,
-            phone=phone,
-            relationship=relationship
+            name=name, phone=phone, relationship=relationship
         )
         logger.info(f"Set emergency contact: {name} ({relationship})")
 
@@ -698,16 +689,14 @@ This typically takes 1-2 business days."""
     def measure_blood_pressure(self) -> str:
         """
         Use a home blood pressure monitor to measure blood pressure.
-        Returns realistic reading based on patient's condition.
 
-        Typical ranges:
-        - Normal: <120/80 mmHg
-        - Elevated: 120-129/<80 mmHg
-        - Stage 1 Hypertension: 130-139/80-89 mmHg
-        - Stage 2 Hypertension: ≥140/90 mmHg
-        - Hypertensive Crisis: ≥180/120 mmHg (emergency)
+        Returns:
+            Blood pressure reading with systolic/diastolic values
         """
-        if not hasattr(self.device, 'has_blood_pressure_monitor') or not self.device.has_blood_pressure_monitor:
+        if (
+            not hasattr(self.device, "has_blood_pressure_monitor")
+            or not self.device.has_blood_pressure_monitor
+        ):
             return "You don't have a blood pressure monitor at home."
 
         # Get simulated reading from device
@@ -744,15 +733,14 @@ Status: {status}
     def measure_blood_glucose(self) -> str:
         """
         Use a glucometer to measure blood glucose level.
-        Critical for diabetic patients to monitor blood sugar.
 
-        Typical ranges (mg/dL):
-        - Hypoglycemia: <70
-        - Normal (fasting): 70-100
-        - Prediabetes: 100-125
-        - Diabetes: ≥126 (fasting)
+        Returns:
+            Blood glucose reading in mg/dL
         """
-        if not hasattr(self.device, 'has_glucose_meter') or not self.device.has_glucose_meter:
+        if (
+            not hasattr(self.device, "has_glucose_meter")
+            or not self.device.has_glucose_meter
+        ):
             return "You don't have a glucose meter at home."
 
         reading = self.device.latest_glucose_reading  # mg/dL
@@ -784,15 +772,14 @@ Time: {self.device.glucose_measurement_time}
     def measure_oxygen_saturation(self) -> str:
         """
         Use a pulse oximeter to measure blood oxygen saturation (SpO2).
-        Important for respiratory conditions, COVID-19 monitoring.
 
-        Typical ranges:
-        - Normal: 95-100%
-        - Mild hypoxemia: 90-94%
-        - Moderate hypoxemia: 85-89%
-        - Severe hypoxemia: <85% (emergency)
+        Returns:
+            SpO2 percentage and heart rate
         """
-        if not hasattr(self.device, 'has_pulse_oximeter') or not self.device.has_pulse_oximeter:
+        if (
+            not hasattr(self.device, "has_pulse_oximeter")
+            or not self.device.has_pulse_oximeter
+        ):
             return "You don't have a pulse oximeter at home."
 
         spo2 = self.device.latest_spo2_reading
@@ -826,14 +813,10 @@ Status: {status}
         """
         Describe current pain using standardized PQRST assessment.
 
-        PQRST Format:
-        - P (Provocation): What makes it better/worse?
-        - Q (Quality): What does it feel like? (sharp, dull, burning, etc.)
-        - R (Radiation): Does it spread anywhere?
-        - S (Severity): Rate 1-10
-        - T (Timing): When did it start? Constant or intermittent?
+        Returns:
+            Pain assessment with provocation, quality, radiation, severity, and timing
         """
-        if not hasattr(self.device, 'current_pain') or not self.device.current_pain:
+        if not hasattr(self.device, "current_pain") or not self.device.current_pain:
             return "You are not experiencing any significant pain right now."
 
         pain = self.device.current_pain
@@ -851,11 +834,7 @@ T - Timing: {pain.timing}
         return result
 
     @is_tool(ToolType.WRITE)
-    def upload_photo(
-        self,
-        body_part: str,
-        description: str
-    ) -> str:
+    def upload_photo(self, body_part: str, description: str) -> str:
         """
         Upload a photo of symptoms (rash, wound, swelling, etc.).
         Used in telehealth for visual assessment.
@@ -876,7 +855,7 @@ T - Timing: {pain.timing}
             "photo_id": photo_id,
             "body_part": body_part,
             "description": description,
-            "uploaded_at": datetime.now().isoformat()
+            "uploaded_at": datetime.now().isoformat(),
         }
         self.device.uploaded_photos.append(photo_record)
 
@@ -900,7 +879,10 @@ The doctor will review this photo and may request additional views if needed."""
         Returns:
             Summary of symptoms with severity assessment
         """
-        if not hasattr(self.device, 'current_symptoms') or not self.device.current_symptoms:
+        if (
+            not hasattr(self.device, "current_symptoms")
+            or not self.device.current_symptoms
+        ):
             return "You are not experiencing any symptoms at this time."
 
         symptoms = self.device.current_symptoms
@@ -927,5 +909,7 @@ Details:
         if severe:
             result += "\n⚠️ You have severe symptoms. Consider seeking immediate medical attention."
 
-        logger.info(f"Patient checked symptoms: {len(symptoms)} total, {len(severe)} severe")
+        logger.info(
+            f"Patient checked symptoms: {len(symptoms)} total, {len(severe)} severe"
+        )
         return result

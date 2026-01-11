@@ -1,5 +1,3 @@
-"""Toolkit for the healthcare system (Agent-side tools)."""
-
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -28,7 +26,7 @@ class HealthcareTools(ToolKitBase):
     def __init__(self, db: HealthcareDB) -> None:
         super().__init__(db)
 
-    # Helper methods (not exposed as tools)
+    # Helper methods
 
     def _get_patient(self, patient_id: str) -> Patient:
         """Get patient from database."""
@@ -36,11 +34,16 @@ class HealthcareTools(ToolKitBase):
             raise ValueError(f"Patient {patient_id} not found")
         return self.db.patients[patient_id]
 
-    def _find_patient_by_identity(self, full_name: str, date_of_birth: str) -> Optional[Patient]:
+    def _find_patient_by_identity(
+        self, full_name: str, date_of_birth: str
+    ) -> Optional[Patient]:
         """Find patient by full name and date of birth."""
         for patient in self.db.patients.values():
             patient_full_name = f"{patient.name.first_name} {patient.name.last_name}"
-            if patient_full_name == full_name and patient.date_of_birth == date_of_birth:
+            if (
+                patient_full_name == full_name
+                and patient.date_of_birth == date_of_birth
+            ):
                 return patient
         return None
 
@@ -64,7 +67,6 @@ class HealthcareTools(ToolKitBase):
 
     def _get_new_appointment_id(self) -> str:
         """Generate a new appointment ID."""
-        # Simple incremental ID for testing (max 10 new appointments per task)
         for i in range(1, 11):
             apt_id = f"APPT_NEW_{i:03d}"
             if apt_id not in self.db.appointments:
@@ -85,48 +87,46 @@ class HealthcareTools(ToolKitBase):
 
     def _is_time_slot_available(self, doctor: Doctor, date: str, time: str) -> bool:
         """Check if a doctor has a specific time slot available."""
-        # Extract day of week from date
         date_obj = datetime.strptime(date, "%Y-%m-%d")
         day_name = date_obj.strftime("%A")
 
-        # Check if doctor works on that day
         if day_name not in doctor.available_days:
             return False
 
-        # Check if time is in available times
         if time not in doctor.available_times:
             return False
 
-        # Check if slot is already booked
         for apt in self.db.appointments.values():
-            if (apt.doctor_id == doctor.doctor_id and
-                apt.date == date and
-                apt.time == time and
-                apt.status == "scheduled"):
+            if (
+                apt.doctor_id == doctor.doctor_id
+                and apt.date == date
+                and apt.time == time
+                and apt.status == "scheduled"
+            ):
                 return False
 
         return True
 
-    # Public tools (exposed to agent)
-
     @is_tool(ToolType.READ)
     def get_patient_details(self, full_name: str, date_of_birth: str) -> Patient:
         """
-        Retrieve complete patient information including demographics, insurance, medical history, and current medications.
-
-        Use this after the patient confirms their identity to look up their medical records.
+        Retrieve complete patient information.
 
         Args:
             full_name: Patient's full name (e.g., "Sarah Johnson")
             date_of_birth: Patient's date of birth in YYYY-MM-DD format (e.g., "1985-03-15")
 
         Returns:
-            Complete patient record with all details including patient_id for use in other tools
+            Complete patient record with all details
         """
         patient = self._find_patient_by_identity(full_name, date_of_birth)
         if patient is None:
-            raise ValueError(f"No patient found with name '{full_name}' and date of birth '{date_of_birth}'. Please verify the patient's identity information.")
-        logger.info(f"Retrieved patient details for {full_name} (patient_id: {patient.patient_id})")
+            raise ValueError(
+                f"No patient found with name '{full_name}' and date of birth '{date_of_birth}'. Please verify the patient's identity information."
+            )
+        logger.info(
+            f"Retrieved patient details for {full_name} (patient_id: {patient.patient_id})"
+        )
         return patient
 
     @is_tool(ToolType.READ)
@@ -188,11 +188,9 @@ class HealthcareTools(ToolKitBase):
         results = []
 
         for doctor in self.db.doctors.values():
-            # Filter by specialty if provided
             if specialty and doctor.specialty.lower() != specialty.lower():
                 continue
 
-            # Filter by date availability if provided
             if date:
                 date_obj = datetime.strptime(date, "%Y-%m-%d")
                 day_name = date_obj.strftime("%A")
@@ -223,7 +221,6 @@ class HealthcareTools(ToolKitBase):
         date_obj = datetime.strptime(date, "%Y-%m-%d")
         day_name = date_obj.strftime("%A")
 
-        # Check if doctor works on this day
         if day_name not in doctor.available_days:
             return []
 
@@ -245,7 +242,7 @@ class HealthcareTools(ToolKitBase):
         reason: str,
     ) -> Appointment:
         """
-        Book a new appointment for a patient. Must verify patient identity and insurance before booking.
+        Book a new appointment for a patient.
 
         Args:
             patient_id: The patient's unique identifier
@@ -258,19 +255,14 @@ class HealthcareTools(ToolKitBase):
         Returns:
             The newly created appointment
         """
-        # Verify patient exists
         patient = self._get_patient(patient_id)
-
-        # Verify doctor exists
         doctor = self._get_doctor(doctor_id)
 
-        # Check if time slot is available
         if not self._is_time_slot_available(doctor, date, time):
             raise ValueError(
                 f"Time slot {time} on {date} is not available for Dr. {doctor.name.last_name}"
             )
 
-        # Determine cost based on appointment type and insurance
         base_costs = {
             "routine_checkup": 150,
             "follow_up": 100,
@@ -279,7 +271,6 @@ class HealthcareTools(ToolKitBase):
         }
         cost = base_costs.get(appointment_type, 150)
 
-        # Create new appointment
         apt_id = self._get_new_appointment_id()
         appointment = Appointment(
             appointment_id=apt_id,
@@ -295,7 +286,6 @@ class HealthcareTools(ToolKitBase):
             cost=cost,
         )
 
-        # Add to database
         self.db.appointments[apt_id] = appointment
         patient.appointment_ids.append(apt_id)
 
@@ -309,7 +299,7 @@ class HealthcareTools(ToolKitBase):
         reason: str,
     ) -> Appointment:
         """
-        Cancel an existing appointment. Must follow cancellation policy (24-hour notice for non-urgent).
+        Cancel an existing appointment.
 
         Args:
             appointment_id: The appointment ID to cancel
@@ -320,13 +310,11 @@ class HealthcareTools(ToolKitBase):
         """
         appointment = self._get_appointment(appointment_id)
 
-        # Check if appointment is already cancelled or completed
         if appointment.status in ["cancelled", "completed"]:
             raise ValueError(
                 f"Cannot cancel appointment with status: {appointment.status}"
             )
 
-        # Update appointment status
         appointment.status = "cancelled"
         if appointment.notes:
             appointment.notes += f" | Cancelled: {reason}"
@@ -356,20 +344,15 @@ class HealthcareTools(ToolKitBase):
         """
         appointment = self._get_appointment(appointment_id)
 
-        # Check if appointment can be rescheduled
         if appointment.status != "scheduled":
             raise ValueError(
                 f"Cannot reschedule appointment with status: {appointment.status}"
             )
 
-        # Verify new time slot is available
         doctor = self._get_doctor(appointment.doctor_id)
         if not self._is_time_slot_available(doctor, new_date, new_time):
-            raise ValueError(
-                f"Time slot {new_time} on {new_date} is not available"
-            )
+            raise ValueError(f"Time slot {new_time} on {new_date} is not available")
 
-        # Update appointment
         old_date = appointment.date
         old_time = appointment.time
         appointment.date = new_date
@@ -379,7 +362,9 @@ class HealthcareTools(ToolKitBase):
         else:
             appointment.notes = f"Rescheduled from {old_date} {old_time}"
 
-        logger.info(f"Rescheduled appointment {appointment_id} to {new_date} {new_time}")
+        logger.info(
+            f"Rescheduled appointment {appointment_id} to {new_date} {new_time}"
+        )
         return appointment
 
     @is_tool(ToolType.READ)
@@ -410,7 +395,9 @@ class HealthcareTools(ToolKitBase):
         }
 
         if procedure_type:
-            result["procedure_covered"] = "routine" in insurance.coverage_details.lower()
+            result["procedure_covered"] = (
+                "routine" in insurance.coverage_details.lower()
+            )
 
         return result
 
@@ -445,13 +432,11 @@ class HealthcareTools(ToolKitBase):
         """
         prescription = self._get_prescription(prescription_id)
 
-        # Verify prescription belongs to patient
         if prescription.patient_id != patient_id:
             raise ValueError(
                 f"Prescription {prescription_id} does not belong to patient {patient_id}"
             )
 
-        # Check if prescription is active and has refills
         if prescription.status != "active":
             raise ValueError(
                 f"Cannot refill prescription with status: {prescription.status}"
@@ -462,10 +447,8 @@ class HealthcareTools(ToolKitBase):
                 "No refills remaining. Patient needs to contact doctor for new prescription."
             )
 
-        # Process refill
         prescription.refills_remaining -= 1
 
-        # Update status if no more refills
         if prescription.refills_remaining == 0:
             prescription.status = "refill_needed"
 
@@ -493,10 +476,11 @@ class HealthcareTools(ToolKitBase):
             if not test:
                 raise ValueError(f"Test {test_id} not found")
             if test.patient_id != patient_id:
-                raise ValueError(f"Test {test_id} does not belong to patient {patient_id}")
+                raise ValueError(
+                    f"Test {test_id} does not belong to patient {patient_id}"
+                )
             return [test]
 
-        # Return all tests for patient
         results = []
         for test in self.db.test_results.values():
             if test.patient_id == patient_id:
@@ -527,7 +511,6 @@ class HealthcareTools(ToolKitBase):
             "specialist": 250,
         }
 
-        # Simplified copay logic (real system would be more complex)
         copay_amounts = {
             "BlueCross": 20,
             "Aetna": 25,
@@ -543,7 +526,9 @@ class HealthcareTools(ToolKitBase):
         return {
             "base_cost": base_cost,
             "copay": copay if insurance_provider != "SelfPay" else base_cost,
-            "insurance_covers": base_cost - copay if insurance_provider != "SelfPay" else 0,
+            "insurance_covers": base_cost - copay
+            if insurance_provider != "SelfPay"
+            else 0,
             "patient_pays": copay if insurance_provider != "SelfPay" else base_cost,
         }
 
@@ -551,7 +536,6 @@ class HealthcareTools(ToolKitBase):
     def transfer_to_nurse(self) -> str:
         """
         Transfer the patient to a nurse for clinical questions or triage.
-        Use this when the request requires clinical expertise beyond scheduling/administrative tasks.
 
         Returns:
             Transfer confirmation message
@@ -569,10 +553,6 @@ class HealthcareTools(ToolKitBase):
         """
         logger.info("Transferring patient to human agent")
         return "I'm transferring you to a specialist who can better assist you. Please hold."
-
-    # ============================================================================
-    # INITIALIZATION ACTIONS - Used to set up test scenarios
-    # ============================================================================
 
     def create_appointment_for_test(
         self,
@@ -605,21 +585,17 @@ class HealthcareTools(ToolKitBase):
             cost=cost,
         )
 
-        # Add to database
         self.db.appointments[appointment_id] = appointment
 
-        # Link to patient
         patient = self.db.patients.get(patient_id)
         if patient:
             if patient.appointment_ids is None:
                 patient.appointment_ids = []
             patient.appointment_ids.append(appointment_id)
 
-        logger.info(f"Created test appointment: {appointment_id} for patient {patient_id}")
-
-    # ============================================================================
-    # ENV_ASSERTION METHODS - Used for deterministic evaluation
-    # ============================================================================
+        logger.info(
+            f"Created test appointment: {appointment_id} for patient {patient_id}"
+        )
 
     def assert_appointment_exists(
         self, patient_id: str, appointment_type: Optional[str] = None
@@ -633,9 +609,8 @@ class HealthcareTools(ToolKitBase):
             return False
 
         if appointment_type is None:
-            return True  # Just check if any appointment exists
+            return True
 
-        # Check if any appointment matches the type
         for apt_id in patient.appointment_ids:
             apt = self.db.appointments.get(apt_id)
             if apt and apt.appointment_type == appointment_type:
@@ -688,35 +663,22 @@ class HealthcareTools(ToolKitBase):
         return patient.insurance.provider == expected_provider
 
     def assert_appointment_count_exceeds_baseline(self) -> bool:
-        """
-        Assert that real appointments exceed baseline + markers.
-
-        Used for marker-based evaluation:
-        - Markers are appointments with date="2024-01-01" and time="00:00"
-        - Real appointments have other dates/times
-        - Baseline is 2 default appointments
-        - Fixed when: num_real_bookings >= (2 + num_markers)
-        """
+        """Assert that real appointments exceed baseline + markers."""
         num_markers = sum(
-            1 for apt in self.db.appointments.values()
+            1
+            for apt in self.db.appointments.values()
             if apt.date == "2024-01-01" and apt.time == "00:00"
         )
         num_real = len(self.db.appointments) - num_markers
 
-        # If no markers, we're in default/fixed state (2 baseline appointments)
         if num_markers == 0:
             return True
 
-        # We're fixed if we have at least as many real appointments as needed
-        # (2 default + 1 per marker)
         return num_real >= (2 + num_markers)
 
     def assert_tool_was_called(self, tool_name: str) -> bool:
         """
         Verify that a specific tool was called during the conversation.
-
-        Used for behavioral validation to ensure agents follow proper protocols
-        (e.g., gather context before transferring, check details before acting).
 
         Args:
             tool_name: Name of the tool to check (e.g., "get_prescription_details")
@@ -730,9 +692,6 @@ class HealthcareTools(ToolKitBase):
         """
         Verify that a specific tool was NOT called during the conversation.
 
-        Used to validate agents didn't attempt incorrect actions
-        (e.g., didn't try to refill controlled substances, didn't book when transfer needed).
-
         Args:
             tool_name: Name of the tool to check
 
@@ -740,12 +699,6 @@ class HealthcareTools(ToolKitBase):
             True if the tool was never called, False if it was called
         """
         return tool_name not in self.db.tool_call_history
-
-    # ============================================================================
-    # HELPER METHODS FOR TASK INITIALIZATION - Modify database state
-    # ============================================================================
-    # These methods are used by task init functions to set up specific scenarios.
-    # They are NOT exposed as tools to agents.
 
     def set_prescription_refills(self, prescription_id: str, refills: int) -> None:
         """Set the number of refills remaining on a prescription."""
@@ -772,7 +725,7 @@ class HealthcareTools(ToolKitBase):
         self,
         appointment_id: str,
         patient_id: str,
-        reason: str = "Pending booking request marker"
+        reason: str = "Pending booking request marker",
     ) -> None:
         """Create a temporary appointment marker to indicate pending booking request."""
         from tau2.domains.healthcare.data_model import Appointment
@@ -788,23 +741,16 @@ class HealthcareTools(ToolKitBase):
             status="scheduled",
             reason=reason,
             created_at=datetime.now().isoformat(),
-            cost=0
+            cost=0,
         )
         self.db.appointments[appointment_id] = marker_appt
 
-    # ============================================================================
-    # MEDICAL DATA READ TOOLS - Clinical information access
-    # ============================================================================
-
     @is_tool(ToolType.READ)
     def get_vital_signs_history(
-        self,
-        patient_id: str,
-        days: int = 30
+        self, patient_id: str, days: int = 30
     ) -> List[Dict[str, Any]]:
         """
         Retrieve vital signs history for the specified number of days.
-        Essential for monitoring trends in blood pressure, heart rate, temperature, etc.
 
         Args:
             patient_id: Patient identifier
@@ -819,36 +765,37 @@ class HealthcareTools(ToolKitBase):
         cutoff = datetime.now() - timedelta(days=days)
 
         recent_vitals = [
-            vs for vs in patient.vital_signs_history
+            vs
+            for vs in patient.vital_signs_history
             if datetime.fromisoformat(vs.timestamp) > cutoff
         ]
 
-        # Convert to dict for JSON serialization
         result = []
         for vs in recent_vitals:
-            result.append({
-                "timestamp": vs.timestamp,
-                "blood_pressure": f"{vs.blood_pressure_systolic}/{vs.blood_pressure_diastolic}" if vs.blood_pressure_systolic else None,
-                "heart_rate": vs.heart_rate,
-                "temperature": vs.temperature,
-                "respiratory_rate": vs.respiratory_rate,
-                "oxygen_saturation": vs.oxygen_saturation,
-                "weight": vs.weight,
-                "height": vs.height
-            })
+            result.append(
+                {
+                    "timestamp": vs.timestamp,
+                    "blood_pressure": f"{vs.blood_pressure_systolic}/{vs.blood_pressure_diastolic}"
+                    if vs.blood_pressure_systolic
+                    else None,
+                    "heart_rate": vs.heart_rate,
+                    "temperature": vs.temperature,
+                    "respiratory_rate": vs.respiratory_rate,
+                    "oxygen_saturation": vs.oxygen_saturation,
+                    "weight": vs.weight,
+                    "height": vs.height,
+                }
+            )
 
         logger.info(f"Retrieved {len(result)} vital signs for patient {patient_id}")
         return result
 
     @is_tool(ToolType.READ)
     def get_lab_results(
-        self,
-        patient_id: str,
-        test_type: Optional[str] = None
+        self, patient_id: str, test_type: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Retrieve laboratory test results for a patient.
-        Critical for monitoring diabetes (HbA1c), cholesterol (lipid panel), kidney function, etc.
 
         Args:
             patient_id: Patient identifier
@@ -859,32 +806,30 @@ class HealthcareTools(ToolKitBase):
         """
         patient = self._get_patient(patient_id)
 
-        # Get all lab results for this patient
         results = [
             self.db.lab_results[lab_id]
             for lab_id in patient.lab_result_ids
             if lab_id in self.db.lab_results
         ]
 
-        # Filter by test type if specified
         if test_type:
             results = [r for r in results if r.test_type == test_type]
 
-        # Sort by date (most recent first)
         results = sorted(results, key=lambda x: x.test_date, reverse=True)
 
-        # Convert to dict for JSON serialization
         result = []
         for lab in results:
-            result.append({
-                "test_id": lab.test_id,
-                "test_type": lab.test_type,
-                "test_date": lab.test_date,
-                "results": lab.results,
-                "status": lab.status,
-                "critical": lab.critical,
-                "ordering_doctor": lab.ordering_doctor
-            })
+            result.append(
+                {
+                    "test_id": lab.test_id,
+                    "test_type": lab.test_type,
+                    "test_date": lab.test_date,
+                    "results": lab.results,
+                    "status": lab.status,
+                    "critical": lab.critical,
+                    "ordering_doctor": lab.ordering_doctor,
+                }
+            )
 
         logger.info(f"Retrieved {len(result)} lab results for patient {patient_id}")
         return result
@@ -904,19 +849,18 @@ class HealthcareTools(ToolKitBase):
 
         conditions = []
         for condition in patient.chronic_conditions:
-            conditions.append({
-                "condition_name": condition.condition_name,
-                "icd10_code": condition.icd10_code,
-                "diagnosed_date": condition.diagnosed_date,
-                "severity": condition.severity,
-                "controlled": condition.controlled,
-                "requires_monitoring": condition.requires_monitoring
-            })
+            conditions.append(
+                {
+                    "condition_name": condition.condition_name,
+                    "icd10_code": condition.icd10_code,
+                    "diagnosed_date": condition.diagnosed_date,
+                    "severity": condition.severity,
+                    "controlled": condition.controlled,
+                    "requires_monitoring": condition.requires_monitoring,
+                }
+            )
 
-        logger.info(f"Retrieved {len(conditions)} chronic conditions for patient {patient_id}")
+        logger.info(
+            f"Retrieved {len(conditions)} chronic conditions for patient {patient_id}"
+        )
         return conditions
-
-    # ============================================================================
-    # MEDICAL DATA WRITE TOOLS - Clinical actions
-    # ============================================================================
-

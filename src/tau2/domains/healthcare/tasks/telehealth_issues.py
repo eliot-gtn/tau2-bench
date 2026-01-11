@@ -3,54 +3,53 @@ from tau2.data_model.tasks import EnvAssertion, EnvFunctionCall
 from tau2.domains.healthcare.environment import HealthcareEnvironment
 from tau2.domains.healthcare.tasks.utils import BaseTask, SelectionSet
 
-# ============================================================================
-# TELEHEALTH_SETUP_ISSUE Intent - SelectionSets 14-16
-# ============================================================================
 
-# ============================================================================
-# ----------------------------------------------------------------------------
-# SelectionSet 14: consent_issues
-# ----------------------------------------------------------------------------
+### Init Functions
+
 
 def init_consent_not_required(env: HealthcareEnvironment) -> list[EnvFunctionCall]:
-    """No consent required for this interaction (baseline)."""
-    # Baseline: all consents are provided
+    """No consent required for this interaction."""
     return [
         EnvFunctionCall(
             env_type="user",
             func_name="provide_consent",
-            arguments={"consent_type": "telehealth"}
+            arguments={"consent_type": "telehealth"},
         ),
         EnvFunctionCall(
             env_type="user",
             func_name="provide_consent",
-            arguments={"consent_type": "data_sharing"}
-        )
+            arguments={"consent_type": "data_sharing"},
+        ),
     ]
 
 
-def init_telehealth_consent_needed(env: HealthcareEnvironment) -> list[EnvFunctionCall | EnvAssertion]:
+def init_telehealth_consent_needed(
+    env: HealthcareEnvironment,
+) -> list[EnvFunctionCall | EnvAssertion]:
     """Telehealth consent required but not yet provided."""
-    # Only add data_sharing consent (missing telehealth)
     return [
         EnvFunctionCall(
             env_type="user",
             func_name="provide_consent",
-            arguments={"consent_type": "data_sharing"}
+            arguments={"consent_type": "data_sharing"},
         )
     ]
 
 
-def init_data_sharing_consent_needed(env: HealthcareEnvironment) -> list[EnvFunctionCall]:
+def init_data_sharing_consent_needed(
+    env: HealthcareEnvironment,
+) -> list[EnvFunctionCall]:
     """Data sharing consent required for specialist referral."""
-    # Only add telehealth consent (missing data_sharing)
     return [
         EnvFunctionCall(
             env_type="user",
             func_name="provide_consent",
-            arguments={"consent_type": "telehealth"}
+            arguments={"consent_type": "telehealth"},
         )
     ]
+
+
+### Fix Functions
 
 
 def fix_obtain_telehealth_consent(env: HealthcareEnvironment) -> list[ToolCall]:
@@ -59,9 +58,7 @@ def fix_obtain_telehealth_consent(env: HealthcareEnvironment) -> list[ToolCall]:
         ToolCall(
             requestor="user",
             name="provide_consent",
-            arguments={
-                "consent_type": "telehealth"
-            }
+            arguments={"consent_type": "telehealth"},
         )
     ]
 
@@ -72,19 +69,13 @@ def fix_obtain_data_sharing_consent(env: HealthcareEnvironment) -> list[ToolCall
         ToolCall(
             requestor="user",
             name="provide_consent",
-            arguments={
-                "consent_type": "data_sharing"
-            }
+            arguments={"consent_type": "data_sharing"},
         )
     ]
 
 
-# ----------------------------------------------------------------------------
-# SelectionSet 15: emergency_contact_issues
-# ----------------------------------------------------------------------------
-
 def init_emergency_contact_current(env: HealthcareEnvironment) -> list[EnvFunctionCall]:
-    """Emergency contact is current and on file (baseline)."""
+    """Emergency contact is current and on file."""
     return [
         EnvFunctionCall(
             env_type="user",
@@ -92,15 +83,14 @@ def init_emergency_contact_current(env: HealthcareEnvironment) -> list[EnvFuncti
             arguments={
                 "name": "Jane Smith",
                 "phone": "555-0102",
-                "relationship": "spouse"
-            }
+                "relationship": "spouse",
+            },
         )
     ]
 
 
 def init_emergency_contact_missing(env: HealthcareEnvironment) -> list[EnvFunctionCall]:
     """No emergency contact on file."""
-    # Set an invalid emergency contact to signal missing state
     return [
         EnvFunctionCall(
             env_type="user",
@@ -108,13 +98,15 @@ def init_emergency_contact_missing(env: HealthcareEnvironment) -> list[EnvFuncti
             arguments={
                 "name": "MISSING - No emergency contact on file",
                 "phone": "000-0000",
-                "relationship": "none"
-            }
+                "relationship": "none",
+            },
         )
     ]
 
 
-def init_emergency_contact_outdated(env: HealthcareEnvironment) -> list[EnvFunctionCall]:
+def init_emergency_contact_outdated(
+    env: HealthcareEnvironment,
+) -> list[EnvFunctionCall]:
     """Emergency contact information is outdated."""
     return [
         EnvFunctionCall(
@@ -123,8 +115,8 @@ def init_emergency_contact_outdated(env: HealthcareEnvironment) -> list[EnvFunct
             arguments={
                 "name": "Old Contact (disconnected)",
                 "phone": "555-9999",
-                "relationship": "friend"
-            }
+                "relationship": "friend",
+            },
         )
     ]
 
@@ -136,88 +128,81 @@ def fix_update_emergency_contact(env: HealthcareEnvironment) -> list[ToolCall]:
             requestor="user",
             name="update_emergency_contact",
             arguments={
-                "name": "Jane Smith",
-                "phone": "555-0102",
-                "relationship": "spouse"
-            }
+                "name": "Emergency Contact",
+                "phone": "555-0000",
+                "relationship": "family",
+            },
+            compare_args=[],
         )
     ]
 
 
-# ----------------------------------------------------------------------------
-# SelectionSet 16: instruction_acknowledgment_issues
-# ----------------------------------------------------------------------------
-
 def init_no_instructions_needed(env: HealthcareEnvironment) -> list[EnvFunctionCall]:
-    """No special instructions required (baseline)."""
-    # Baseline: all instructions are acknowledged
+    """No special instructions required."""
     return [
         EnvFunctionCall(
             env_type="user",
             func_name="acknowledge_instructions",
-            arguments={"instruction_type": "medication"}
+            arguments={"instruction_type": "medication"},
         ),
         EnvFunctionCall(
             env_type="user",
             func_name="acknowledge_instructions",
-            arguments={"instruction_type": "post_care"}
+            arguments={"instruction_type": "post_care"},
         ),
         EnvFunctionCall(
             env_type="user",
             func_name="acknowledge_instructions",
-            arguments={"instruction_type": "pre_surgery"}
-        )
+            arguments={"instruction_type": "pre_surgery"},
+        ),
     ]
 
 
 def init_medication_instructions(env: HealthcareEnvironment) -> list[EnvFunctionCall]:
     """Medication instructions need acknowledgment."""
-    # Add post_care and pre_surgery but not medication (missing medication)
     return [
         EnvFunctionCall(
             env_type="user",
             func_name="acknowledge_instructions",
-            arguments={"instruction_type": "post_care"}
+            arguments={"instruction_type": "post_care"},
         ),
         EnvFunctionCall(
             env_type="user",
             func_name="acknowledge_instructions",
-            arguments={"instruction_type": "pre_surgery"}
-        )
+            arguments={"instruction_type": "pre_surgery"},
+        ),
     ]
 
 
 def init_post_care_instructions(env: HealthcareEnvironment) -> list[EnvFunctionCall]:
     """Post-care instructions need acknowledgment."""
-    # Add medication and pre_surgery but not post_care (missing post_care)
     return [
         EnvFunctionCall(
             env_type="user",
             func_name="acknowledge_instructions",
-            arguments={"instruction_type": "medication"}
+            arguments={"instruction_type": "medication"},
         ),
         EnvFunctionCall(
             env_type="user",
             func_name="acknowledge_instructions",
-            arguments={"instruction_type": "pre_surgery"}
-        )
+            arguments={"instruction_type": "pre_surgery"},
+        ),
     ]
 
 
 def init_pre_surgery_instructions(env: HealthcareEnvironment) -> list[EnvFunctionCall]:
     """Pre-surgery instructions need acknowledgment."""
-    # Add medication and post_care but not pre_surgery (missing pre_surgery)
     return [
         EnvFunctionCall(
             env_type="user",
             func_name="acknowledge_instructions",
-            arguments={"instruction_type": "medication"}
+            arguments={"instruction_type": "medication"},
         ),
         EnvFunctionCall(
             env_type="user",
             func_name="acknowledge_instructions",
-            arguments={"instruction_type": "post_care"}
-        )
+            arguments={"instruction_type": "post_care"},
+        ),
     ]
 
 
@@ -227,9 +212,8 @@ def fix_acknowledge_medication(env: HealthcareEnvironment) -> list[ToolCall]:
         ToolCall(
             requestor="user",
             name="acknowledge_instructions",
-            arguments={
-                "instruction_type": "medication"
-            }
+            arguments={"instruction_type": "medication"},
+            compare_args=["instruction_type"],
         )
     ]
 
@@ -240,9 +224,8 @@ def fix_acknowledge_post_care(env: HealthcareEnvironment) -> list[ToolCall]:
         ToolCall(
             requestor="user",
             name="acknowledge_instructions",
-            arguments={
-                "instruction_type": "post_care"
-            }
+            arguments={"instruction_type": "post_care"},
+            compare_args=["instruction_type"],
         )
     ]
 
@@ -253,21 +236,18 @@ def fix_acknowledge_pre_surgery(env: HealthcareEnvironment) -> list[ToolCall]:
         ToolCall(
             requestor="user",
             name="acknowledge_instructions",
-            arguments={
-                "instruction_type": "pre_surgery"
-            }
+            arguments={"instruction_type": "pre_surgery"},
+            compare_args=["instruction_type"],
         )
     ]
 
 
-# ============================================================================
-# Base Tasks for SelectionSet 14: consent_issues
-# ============================================================================
+### Base Tasks
 
 consent_not_required_task = BaseTask(
     name="not_required",
-    description="No consent required (baseline)",
-    init_funcs=[],  # Baseline - fresh environment is already in good state
+    description="No consent required",
+    init_funcs=[],
     fix_funcs=[],
 )
 
@@ -285,14 +265,10 @@ data_sharing_consent_needed_task = BaseTask(
     fix_funcs=[fix_obtain_data_sharing_consent],
 )
 
-# ============================================================================
-# Base Tasks for SelectionSet 15: emergency_contact_issues
-# ============================================================================
-
 emergency_contact_current_task = BaseTask(
     name="current",
-    description="Emergency contact current and on file (baseline)",
-    init_funcs=[],  # Baseline - fresh environment is already in good state
+    description="Emergency contact current and on file",
+    init_funcs=[],
     fix_funcs=[],
 )
 
@@ -310,14 +286,10 @@ emergency_contact_outdated_task = BaseTask(
     fix_funcs=[fix_update_emergency_contact],
 )
 
-# ============================================================================
-# Base Tasks for SelectionSet 16: instruction_acknowledgment_issues
-# ============================================================================
-
 no_instructions_needed_task = BaseTask(
     name="no_instructions_needed",
-    description="No special instructions required (baseline)",
-    init_funcs=[],  # Baseline - fresh environment is already in good state
+    description="No special instructions required",
+    init_funcs=[],
     fix_funcs=[],
 )
 
@@ -342,13 +314,11 @@ pre_surgery_instructions_task = BaseTask(
     fix_funcs=[fix_acknowledge_pre_surgery],
 )
 
-# ============================================================================
-# SelectionSets
-# ============================================================================
+
+### SelectionSets
 
 consent_issues = SelectionSet(
     tasks=[
-        consent_not_required_task,
         telehealth_consent_needed_task,
         data_sharing_consent_needed_task,
     ]
@@ -356,7 +326,6 @@ consent_issues = SelectionSet(
 
 emergency_contact_issues = SelectionSet(
     tasks=[
-        emergency_contact_current_task,
         emergency_contact_missing_task,
         emergency_contact_outdated_task,
     ]
@@ -364,7 +333,6 @@ emergency_contact_issues = SelectionSet(
 
 instruction_acknowledgment_issues = SelectionSet(
     tasks=[
-        no_instructions_needed_task,
         medication_instructions_task,
         post_care_instructions_task,
         pre_surgery_instructions_task,
@@ -376,6 +344,3 @@ telehealth_setup_selection_sets = [
     emergency_contact_issues,
     instruction_acknowledgment_issues,
 ]
-
-
-# ============================================================================

@@ -87,12 +87,10 @@ def compose_tasks(
         if task_validator is None and len(tasks) == 0:
             continue
         init_funcs = [f for t in tasks for f in t.init_funcs]
-        # Deduplicate fix_funcs while preserving order
         seen_fix = set()
         fix_funcs = []
         for t in tasks:
             for f in t.fix_funcs:
-                # Use id() for function identity since functions aren't hashable by value
                 func_id = id(f) if f is not None else None
                 if func_id not in seen_fix:
                     seen_fix.add(func_id)

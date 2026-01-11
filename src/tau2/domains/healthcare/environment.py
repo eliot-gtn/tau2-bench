@@ -11,6 +11,8 @@ from tau2.domains.healthcare.utils import (
     HEALTHCARE_DB_PATH,
     HEALTHCARE_POLICY_PATH,
     HEALTHCARE_TASK_SET_PATH,
+    HEALTHCARE_TASK_SET_FULL_PATH,
+    HEALTHCARE_TASK_SET_SMALL_PATH,
     HEALTHCARE_USER_DB_PATH,
 )
 from tau2.environment.environment import Environment
@@ -22,6 +24,7 @@ class HealthcareEnvironment(Environment):
     Healthcare environment with bidirectional tool support.
     Syncs agent-side and patient-side information.
     """
+
     tools: HealthcareTools
     user_tools: HealthcareUserTools
 
@@ -35,70 +38,42 @@ class HealthcareEnvironment(Environment):
         super().__init__(domain_name, policy, tools, user_tools)
 
     def make_tool_call(self, tool_name: str, requestor: str = "assistant", **kwargs):
-        """
-        Override to track assistant tool calls in real-time for behavioral assertions.
-        """
-        # Track assistant tool calls before execution
+        """Override to track assistant tool calls in real-time for behavioral assertions."""
         if requestor == "assistant":
             self.tools.db.tool_call_history.append(tool_name)
 
-        # Execute the tool call via parent class
         return super().make_tool_call(tool_name, requestor, **kwargs)
 
     def set_state(self, initialization_data, initialization_actions, message_history):
-        """
-        Override to track tool calls for behavioral assertions.
-        """
-        # First, let parent class do the standard state replay
+        """Override to track tool calls for behavioral assertions."""
         super().set_state(initialization_data, initialization_actions, message_history)
 
-        # Then extract and store tool call history in the database
         from tau2.data_model.message import AssistantMessage, UserMessage
 
         tool_calls = []
         for message in message_history:
-            if isinstance(message, (AssistantMessage, UserMessage)) and message.is_tool_call():
+            if (
+                isinstance(message, (AssistantMessage, UserMessage))
+                and message.is_tool_call()
+            ):
                 for tc in message.tool_calls:
-                    # Only track assistant tool calls for protocol validation
                     if tc.requestor == "assistant":
                         tool_calls.append(tc.name)
 
-        # Store in database for assertion functions to access
         self.tools.db.tool_call_history = tool_calls
 
     def sync_tools(self):
-        """
-        Sync the agent tools with the patient's user tools.
-        This ensures consistency between what the patient has access to
-        and what the agent's system shows.
-
-        Examples of syncing:
-        - If patient makes payment via user tool, update payment records
-        - Keep patient info consistent between agent and user views
-        """
-        # Get patient ID from user surroundings
+        """Sync agent and patient tool state."""
         patient_id = self.user_tools.surroundings.patient_id
 
-        # Verify patient exists in agent database
         if patient_id not in self.tools.db.patients:
-            # This is a scenario setup issue, not a runtime error
             return
 
         patient = self.tools.db.patients[patient_id]
 
-        # Sync identity information (ensure consistency)
-        # The patient's insurance card should match what's in the system
-        user_insurance = self.user_tools.device.insurance_card
-        system_insurance = patient.insurance
-
-        # In a real system, we might want to validate these match
-        # For now, we assume they're set up consistently in the task data
-
-        # Sync portal information if patient has accessed it
         if self.user_tools.device.portal_info:
             portal = self.user_tools.device.portal_info
 
-            # Update upcoming appointments in portal view
             upcoming_apts = []
             for apt_id in patient.appointment_ids:
                 if apt_id in self.tools.db.appointments:
@@ -108,15 +83,11 @@ class HealthcareEnvironment(Environment):
                             f"{apt.date} at {apt.time} - {apt.appointment_type} with Dr. {self.tools.db.doctors[apt.doctor_id].name.last_name}"
                         )
 
-            # Keep only most recent 3 appointments
             portal.upcoming_appointments = upcoming_apts[:3]
 
-            # Update outstanding balance
             total_balance = 0
             for payment in self.tools.db.payments.values():
                 if payment.patient_id == patient_id:
-                    # In a real system, this would calculate unpaid balances
-                    # For simplicity, we'll just show 0 for now
                     pass
             portal.outstanding_balance = total_balance
 
@@ -137,28 +108,23 @@ def get_environment(
     Returns:
         Configured HealthcareEnvironment instance
     """
-    # Load databases
     if db is None:
         db = cast(HealthcareDB, HealthcareDB.load(str(HEALTHCARE_DB_PATH)))
 
     tools = HealthcareTools(db)
 
-    # User tools only needed in normal mode (not solo)
     if not solo_mode:
         if user_db is None:
-            # Load default user_db
-            user_db = cast(HealthcareUserDB, HealthcareUserDB.load(str(HEALTHCARE_USER_DB_PATH)))
+            user_db = cast(
+                HealthcareUserDB, HealthcareUserDB.load(str(HEALTHCARE_USER_DB_PATH))
+            )
         user_tools = HealthcareUserTools(user_db)
     else:
-        # Solo mode not yet implemented for healthcare
-        # Would need to be implemented similar to airline/retail solo modes
         raise ValueError("Healthcare domain does not yet support solo mode")
 
-    # Load policy
     with open(HEALTHCARE_POLICY_PATH, "r") as fp:
         policy = fp.read()
 
-    # Create environment
     env = HealthcareEnvironment(
         domain_name="healthcare",
         policy=policy,
@@ -174,10 +140,10 @@ def get_tasks(task_split_name: Optional[str] = "base") -> list[Task]:
     Load healthcare tasks from the task file.
 
     Args:
-        task_split_name: Optional task split name. Currently only "base" is supported.
+        task_split_name: Optional task split name. Supported splits: "base", "train", "test".
 
     Returns:
-        List of Task objects
+        List of Task objects filtered by the specified split
     """
     tasks = load_file(HEALTHCARE_TASK_SET_PATH)
     tasks = [Task.model_validate(task) for task in tasks]
@@ -185,11 +151,37 @@ def get_tasks(task_split_name: Optional[str] = "base") -> list[Task]:
     if task_split_name is None:
         return tasks
 
-    # For now, we only have one split
-    # In the future, could add train/val/test splits
-    if task_split_name != "base":
+    task_splits = get_tasks_split()
+    if task_split_name not in task_splits:
         raise ValueError(
-            f"Invalid task split name: {task_split_name}. Currently only 'base' is supported."
+            f"Invalid task split name: {task_split_name}. Valid splits are: {list(task_splits.keys())}"
         )
 
+    tasks = [task for task in tasks if task.id in task_splits[task_split_name]]
     return tasks
+
+
+def get_tasks_split() -> dict[str, list[str]]:
+    """
+    Load task split definitions from split_tasks.json.
+
+    Returns:
+        Dictionary mapping split names ("train", "test", "base") to lists of task IDs
+    """
+    split_file = (
+        Path(HEALTHCARE_TASK_SET_PATH).parent
+        / f"split_{Path(HEALTHCARE_TASK_SET_PATH).stem}.json"
+    )
+    return load_file(split_file)
+
+
+def get_tasks_full(task_split_name: Optional[str] = None) -> list[Task]:
+    """Load the full healthcare task set from tasks_full.json."""
+    tasks = load_file(HEALTHCARE_TASK_SET_FULL_PATH)
+    return [Task.model_validate(task) for task in tasks]
+
+
+def get_tasks_small(task_split_name: Optional[str] = None) -> list[Task]:
+    """Load the small healthcare task set from tasks_small.json."""
+    tasks = load_file(HEALTHCARE_TASK_SET_SMALL_PATH)
+    return [Task.model_validate(task) for task in tasks]

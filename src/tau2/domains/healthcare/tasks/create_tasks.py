@@ -17,6 +17,7 @@ from tau2.domains.healthcare.tasks.urgent_triage_issues import (
 )
 from tau2.domains.healthcare.tasks.chronic_monitoring_issues import (
     chronic_monitoring_selection_sets,
+    compose_chronic_monitoring_tasks,
 )
 from tau2.domains.healthcare.tasks.telehealth_issues import (
     telehealth_setup_selection_sets,
@@ -24,8 +25,19 @@ from tau2.domains.healthcare.tasks.telehealth_issues import (
 from tau2.domains.healthcare.tasks.test_results_issues import (
     test_results_selection_sets,
 )
+from tau2.domains.healthcare.tasks.patient_mistake_issues import (
+    patient_mistake_selection_sets,
+)
+from tau2.domains.healthcare.tasks.critical_triage_issues import (
+    critical_triage_selection_sets,
+    is_fixed_critical_triage,
+    get_env_assertions_critical_triage,
+)
 from tau2.domains.healthcare.tasks.manager import TaskManager
-from tau2.domains.healthcare.tasks.const import TOOL_CALL_GROUNDING, TOOL_CALL_INFO_CHECK
+from tau2.domains.healthcare.tasks.const import (
+    TOOL_CALL_GROUNDING,
+    TOOL_CALL_INFO_CHECK,
+)
 from tau2.domains.healthcare.tasks.utils import get_persona_from_task_id
 from tau2.domains.healthcare.tasks.evaluation_functions import (
     is_fixed_appointment_scheduling,
@@ -39,33 +51,21 @@ from tau2.domains.healthcare.tasks.evaluation_functions import (
     is_fixed_test_results_access,
     get_env_assertions_test_results_access,
 )
+from tau2.domains.healthcare.tasks.patient_mistake_issues import (
+    is_fixed_patient_mistake,
+    get_env_assertions_patient_mistake,
+)
 from tau2.utils import DATA_DIR
 from tau2.data_model.tasks import EnvAssertion, EnvFunctionCall
 
 
-# ============================================================================
-# Shared helper functions
-# ============================================================================
-
 def get_env_assertions(expected_success: bool) -> list[EnvAssertion]:
-    """
-    Get environment assertions - placeholder for now.
-
-    TODO: Implement intent-specific get_env_assertions functions.
-    Each intent should have its own function that returns assertions
-    to verify the task is fixed (e.g., prescription refilled, appointment booked).
-    See telecom domain for reference implementation.
-    """
+    """Placeholder for environment assertions."""
     return []
 
 
 def set_surrounding(env) -> list[EnvFunctionCall]:
-    """
-    Set the patient info for task initialization.
-
-    Uses patient_001 (Sarah Johnson) from the default database.
-    Sets up basic patient environment including portal access.
-    """
+    """Set the patient info for task initialization."""
     return [
         EnvFunctionCall(
             env_type="user",
@@ -73,13 +73,13 @@ def set_surrounding(env) -> list[EnvFunctionCall]:
             arguments={
                 "name": "Sarah Johnson",
                 "patient_id": "patient_001",
-                "date_of_birth": "1985-03-15"
-            }
+                "date_of_birth": "1985-03-15",
+            },
         ),
         EnvFunctionCall(
             env_type="user",
             func_name="set_user_location",
-            arguments={"location": "home"}
+            arguments={"location": "home"},
         ),
         EnvFunctionCall(
             env_type="user",
@@ -89,31 +89,16 @@ def set_surrounding(env) -> list[EnvFunctionCall]:
                 "recent_visits": [],
                 "test_results_available": False,
                 "messages_count": 0,
-                "outstanding_balance": 0
-            }
-        )
+                "outstanding_balance": 0,
+            },
+        ),
     ]
 
 
 def is_fixed(env) -> bool:
-    """
-    Check if the issue is fixed - placeholder for now.
-
-    TODO: Implement intent-specific is_fixed functions.
-    Each intent should have its own function that uses get_env_assertions()
-    to verify the task is resolved. For example:
-    - prescription_refill: check if refill was processed or escalated
-    - appointment_scheduling: check if appointment was booked
-    See telecom domain for reference implementation.
-
-    For now, return True (environment is OK by default).
-    """
+    """Placeholder: currently always returns True."""
     return True
 
-
-# ============================================================================
-# Task Managers for each intent
-# ============================================================================
 
 prescription_refill_task_manager = TaskManager(
     name="prescription_refill",
@@ -199,10 +184,34 @@ test_results_task_manager = TaskManager(
     domain="healthcare",
 )
 
+patient_mistake_task_manager = TaskManager(
+    name="patient_mistake",
+    purpose="Test handling of patient misinformation and verification workflows.",
+    task_instructions=f"Report your symptoms or medication concerns as you understand them. The agent may ask you to verify information using tools. {TOOL_CALL_INFO_CHECK} {TOOL_CALL_GROUNDING}",
+    reason_for_call="You have concerns about your symptoms or medication.",
+    known_info="You are {name}, born on {date_of_birth}, currently at {location}.",
+    ticket="Patient {name} (DOB: {date_of_birth}) is calling with health concerns. Verify patient-reported information through objective tools (vitals, medication bottles). Use clinical reasoning to identify discrepancies between patient claims and objective data. CRITICAL SAFETY: Life-threatening symptoms (chest pain, difficulty breathing, severe pain) ALWAYS require immediate transfer to clinical staff, regardless of vital sign readings.",
+    selection_sets=patient_mistake_selection_sets,
+    get_env_assertions=get_env_assertions_patient_mistake,
+    set_surrounding=set_surrounding,
+    is_fixed=is_fixed_patient_mistake,
+    domain="healthcare",
+)
 
-# ============================================================================
-# Main task creation function
-# ============================================================================
+critical_triage_task_manager = TaskManager(
+    name="critical_triage",
+    purpose="Test recognition of critical vital signs requiring immediate escalation.",
+    task_instructions=f"Report your symptoms as described. You may underestimate the severity. Use home monitoring tools when asked. {TOOL_CALL_INFO_CHECK} {TOOL_CALL_GROUNDING}",
+    reason_for_call="You're not feeling well and want to check if you need an appointment.",
+    known_info="You are {name}, born on {date_of_birth}, currently at {location}. You have home health monitoring devices.",
+    ticket="Patient {name} (DOB: {date_of_birth}) is calling about symptoms. Patient may underestimate severity. CRITICAL: Measure vital signs objectively. Critical values (BP ≥180/120, glucose <70, O2 <85%) require IMMEDIATE transfer to clinical staff, even if patient reports mild symptoms.",
+    selection_sets=critical_triage_selection_sets,
+    get_env_assertions=get_env_assertions_critical_triage,
+    set_surrounding=set_surrounding,
+    is_fixed=is_fixed_critical_triage,
+    domain="healthcare",
+)
+
 
 def create_tasks(save_tasks: bool = True, max_count_per_bin: int = 3) -> list[Task]:
     tasks: list[Task] = []
@@ -211,7 +220,9 @@ def create_tasks(save_tasks: bool = True, max_count_per_bin: int = 3) -> list[Ta
     print(f"Number of prescription refill tasks: {len(prescription_tasks)}")
     tasks.extend(prescription_tasks)
 
-    appointment_tasks = appointment_scheduling_task_manager.create_tasks(save_tasks=False)
+    appointment_tasks = appointment_scheduling_task_manager.create_tasks(
+        save_tasks=False
+    )
     print(f"Number of appointment scheduling tasks: {len(appointment_tasks)}")
     tasks.extend(appointment_tasks)
 
@@ -219,7 +230,11 @@ def create_tasks(save_tasks: bool = True, max_count_per_bin: int = 3) -> list[Ta
     print(f"Number of urgent triage tasks: {len(urgent_tasks)}")
     tasks.extend(urgent_tasks)
 
-    chronic_tasks = chronic_monitoring_task_manager.create_tasks(save_tasks=False)
+    # Use custom composition for chronic monitoring to consolidate appointments
+    chronic_composed_tasks = compose_chronic_monitoring_tasks()
+    chronic_tasks = chronic_monitoring_task_manager.create_tasks(
+        save_tasks=False, custom_composed_tasks=chronic_composed_tasks
+    )
     print(f"Number of chronic monitoring tasks: {len(chronic_tasks)}")
     tasks.extend(chronic_tasks)
 
@@ -231,14 +246,21 @@ def create_tasks(save_tasks: bool = True, max_count_per_bin: int = 3) -> list[Ta
     print(f"Number of test results access tasks: {len(test_results_tasks)}")
     tasks.extend(test_results_tasks)
 
+    patient_mistake_tasks = patient_mistake_task_manager.create_tasks(save_tasks=False)
+    print(f"Number of patient mistake tasks: {len(patient_mistake_tasks)}")
+    tasks.extend(patient_mistake_tasks)
+
+    critical_triage_tasks = critical_triage_task_manager.create_tasks(save_tasks=False)
+    print(f"Number of critical triage tasks: {len(critical_triage_tasks)}")
+    tasks.extend(critical_triage_tasks)
+
     print(f"Number of tasks: {len(tasks)}")
 
     file = DATA_DIR / "tau2" / "domains" / "healthcare" / f"tasks_full.json"
     if save_tasks:
         with open(file, "w") as f:
-            json.dump([t.model_dump() for t in tasks], f, indent=2)
+            json.dump([t.model_dump(exclude_unset=True) for t in tasks], f, indent=2)
 
-    # Build tasks with attributes
     tasks_with_attrs = []
     for intent_tasks, intent in [
         (prescription_tasks, "prescription_refill"),
@@ -247,6 +269,8 @@ def create_tasks(save_tasks: bool = True, max_count_per_bin: int = 3) -> list[Ta
         (chronic_tasks, "chronic_monitoring"),
         (telehealth_tasks, "telehealth_setup"),
         (test_results_tasks, "test_results_access"),
+        (patient_mistake_tasks, "patient_mistake"),
+        (critical_triage_tasks, "critical_triage"),
     ]:
         for task in intent_tasks:
             num_subtasks = len(task.id.split("|"))
@@ -264,30 +288,47 @@ def create_tasks(save_tasks: bool = True, max_count_per_bin: int = 3) -> list[Ta
     print(f"Number of tasks in small set: {len(small_tasks)}")
     if save_tasks:
         with open(file_small, "w") as f:
-            json.dump([t.model_dump() for t in small_tasks], f, indent=2)
+            json.dump(
+                [t.model_dump(exclude_unset=True) for t in small_tasks], f, indent=2
+            )
 
     file_sampled = DATA_DIR / "tau2" / "domains" / "healthcare" / f"tasks.json"
+
     tasks_by_bins = defaultdict(list)
     for task in tasks_with_attrs:
-        if task["num_subtasks"] < 2:  # We only keep tasks with at least 2 subtasks
+        # Keep tasks with 2+ subtasks, except critical_triage (important despite 1 subtask)
+        if task["num_subtasks"] < 2 and task["intent"] != "critical_triage":
             continue
         tasks_by_bins[(task["intent"], task["num_subtasks"], task["persona"])].append(
             task["task"]
         )
 
-    # sample $n$ tasks per intent, difficulty level, and persona
     sampled_tasks = []
-    for (intent, num_subtasks, persona), tasks in tasks_by_bins.items():
-        num_sampled = min(max_count_per_bin, len(tasks))
-        sampled_tasks.extend(random.sample(tasks, num_sampled))
+    for (intent, num_subtasks, persona), tasks_in_bin in tasks_by_bins.items():
+        num_sampled = min(max_count_per_bin, len(tasks_in_bin))
+        sampled_tasks.extend(random.sample(tasks_in_bin, num_sampled))
         print(
             f"Sampled {num_sampled} tasks for {intent} with {num_subtasks} subtasks and persona {persona}..."
         )
 
-    print(f"Number of sampled tasks: {len(sampled_tasks)}")
+    action_counts = [
+        len(task.evaluation_criteria.actions or []) for task in sampled_tasks
+    ]
+    simple = sum(1 for c in action_counts if c <= 2)
+    medium = sum(1 for c in action_counts if 3 <= c <= 4)
+    hard = sum(1 for c in action_counts if c >= 5)
+
+    print(f"\nFinal task distribution:")
+    print(f"  Total sampled: {len(sampled_tasks)}")
+    print(f"  Natural complexity distribution (0-2 / 3-4 / 5+):")
+    print(f"    Simple (0-2): {simple} ({simple / len(sampled_tasks) * 100:.1f}%)")
+    print(f"    Medium (3-4): {medium} ({medium / len(sampled_tasks) * 100:.1f}%)")
+    print(f"    Hard (5+):    {hard} ({hard / len(sampled_tasks) * 100:.1f}%)")
     if save_tasks:
         with open(file_sampled, "w") as f:
-            json.dump([t.model_dump() for t in sampled_tasks], f, indent=2)
+            json.dump(
+                [t.model_dump(exclude_unset=True) for t in sampled_tasks], f, indent=2
+            )
 
     return tasks
 

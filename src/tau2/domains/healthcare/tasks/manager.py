@@ -1,5 +1,4 @@
 import json
-import random
 import textwrap
 from copy import deepcopy
 from typing import Callable, Optional, Protocol, cast
@@ -18,7 +17,10 @@ class GetEnvAssertionsCallable(Protocol):
 
     Returns tuple of (env_assertions, nl_assertions, communicate_info).
     """
-    def __call__(self, expected_success: bool) -> tuple[list[EnvAssertion], list[str], list[str]]: ...
+
+    def __call__(
+        self, expected_success: bool
+    ) -> tuple[list[EnvAssertion], list[str], list[str]]: ...
 
 
 def prepare_base_task(base_task: dict, env: HealthcareEnvironment) -> dict:
@@ -31,15 +33,13 @@ def prepare_base_task(base_task: dict, env: HealthcareEnvironment) -> dict:
     user_info = {
         "name": patient_name,
         "date_of_birth": date_of_birth,
-        "location": location
+        "location": location,
     }
 
-    # Update known info based on user info
     known_info_template = base_task["user_scenario"]["instructions"]["known_info"]
     known_info = known_info_template.format(**user_info)
     base_task["user_scenario"]["instructions"]["known_info"] = known_info
 
-    # Update ticket based on user info
     ticket_template = base_task["ticket"]
     ticket = ticket_template.format(**user_info)
     base_task["ticket"] = ticket
@@ -97,9 +97,8 @@ class TaskManager:
         env.run_env_function_calls(init_actions)
         for func in composed_task.init_funcs:
             func_calls = func(env)
-            env.run_env_function_calls(func_calls)  # env assertion check here
+            env.run_env_function_calls(func_calls)
             init_actions.extend(
-                # exclude env assertions
                 [fc for fc in func_calls if not isinstance(fc, EnvAssertion)]
             )
 
@@ -111,19 +110,35 @@ class TaskManager:
                 break
             tool_calls = func(env)
             fix_tool_calls.extend(tool_calls)
+            # Check if any fix function contains a transfer action
+            if any(
+                tc.name in {"transfer_to_nurse", "transfer_to_human_agent"}
+                for tc in tool_calls
+            ):
+                expected_failure = True
+                break
+
+        deduplicated_tool_calls: list[ToolCall] = []
+        seen_identity_verification = False
+
+        for tc in fix_tool_calls:
+            if tc.name == "get_patient_details" and tc.requestor == "assistant":
+                if seen_identity_verification:
+                    continue
+                else:
+                    seen_identity_verification = True
+
+            deduplicated_tool_calls.append(tc)
+
+        fix_tool_calls = deduplicated_tool_calls
 
         if expected_failure:
-            # Tasks with fix_funcs=[None] require escalation to nurse (clinical) or human (administrative)
-            # For healthcare, clinical emergencies (severe symptoms, critical values) → transfer_to_nurse
-            # Administrative issues (identity verification failed, system errors) → transfer_to_human_agent
-            # Default to transfer_to_nurse for healthcare domain as most fix_funcs=[None] are clinical
             fix_actions = [
                 {
                     "action_id": "transfer_to_nurse",
                     "name": "transfer_to_nurse",
                     "requestor": "assistant",
                     "arguments": {},
-                    "compare_args": [],
                 }
             ]
         else:
@@ -135,43 +150,41 @@ class TaskManager:
                     "requestor": tc.requestor,
                     "arguments": tc.arguments,
                 }
-                if tc.compare_args is not None:
-                    action["compare_args"] = tc.compare_args
+                compare_args = getattr(tc, "compare_args", None)
+                if compare_args is not None:
+                    action["compare_args"] = compare_args
                 fix_actions.append(action)
 
-        # Get evaluation criteria (env_assertions, nl_assertions, communicate_info)
-        env_assertions, nl_assertions, communicate_info = self.get_env_assertions(expected_success=not expected_failure)
+        env_assertions, nl_assertions, communicate_info = self.get_env_assertions(
+            expected_success=not expected_failure
+        )
         if not expected_failure:
             for func in composed_task.extra_env_assertions:
                 extra_assertions = func(env)
                 env_assertions.extend(extra_assertions)
 
-        # Determine reward_basis based on intent type and evaluation criteria
-        # Healthcare uses hybrid approach:
-        # - Outcome-focused (ENV_ASSERTION only): appointment_scheduling, test_results_access,
-        #   chronic_monitoring, telehealth_setup - flexible workflow, outcome matters
-        # - Strict workflow (ACTION + ENV_ASSERTION): prescription_refill, urgent_triage -
-        #   safety critical, process compliance required
-
         outcome_focused_intents = {
             "appointment_scheduling",
             "test_results_access",
             "chronic_monitoring",
-            "telehealth_setup"
+            "telehealth_setup",
+            "urgent_triage",
         }
 
-        # Determine intent name from task manager
-        intent_name = self.name  # TaskManager name corresponds to intent
+        intent_name = self.name
 
         if expected_failure:
-            # Unfixable tasks: only check escalation action
             reward_eval_mode = ["ACTION"]
         elif intent_name in outcome_focused_intents:
-            # Outcome-focused intents: ENV_ASSERTION only (Telecom pattern)
-            # Actions are kept in task for documentation but not evaluated
-            reward_eval_mode = ["ENV_ASSERTION"] if len(env_assertions) > 0 else ["ACTION"]
+            # For outcome-focused tasks, use BOTH ENV_ASSERTION and ACTION
+            # to enforce correct outcomes AND safe procedures
+            if len(fix_actions) > 0 and len(env_assertions) > 0:
+                reward_eval_mode = ["ENV_ASSERTION", "ACTION"]
+            elif len(env_assertions) > 0:
+                reward_eval_mode = ["ENV_ASSERTION"]
+            else:
+                reward_eval_mode = ["ACTION"]
         elif len(fix_actions) > 0 and len(env_assertions) > 0:
-            # Strict workflow intents: Both actions AND final state (original Healthcare pattern)
             reward_eval_mode = ["ACTION", "ENV_ASSERTION"]
         elif len(env_assertions) > 0:
             reward_eval_mode = ["ENV_ASSERTION"]
@@ -182,8 +195,12 @@ class TaskManager:
         final_task["initial_state"]["initialization_actions"] = init_actions
         final_task["evaluation_criteria"]["actions"] = fix_actions
         final_task["evaluation_criteria"]["env_assertions"] = env_assertions
-        final_task["evaluation_criteria"]["nl_assertions"] = nl_assertions if nl_assertions else None
-        final_task["evaluation_criteria"]["communicate_info"] = communicate_info if communicate_info else None
+        final_task["evaluation_criteria"]["nl_assertions"] = (
+            nl_assertions if nl_assertions else None
+        )
+        final_task["evaluation_criteria"]["communicate_info"] = (
+            communicate_info if communicate_info else None
+        )
         final_task["evaluation_criteria"]["reward_basis"] = reward_eval_mode
         final_task["user_scenario"]["persona"] = PERSONAS[persona]
         final_task["id"] += f"{composed_task.name}[PERSONA:{persona}]"
@@ -191,8 +208,15 @@ class TaskManager:
         task = Task(**final_task)
         return task
 
-    def create_tasks(self, save_tasks: bool = False) -> list[Task]:
-        composed_tasks = compose_tasks(self.selection_sets, self.task_validator)
+    def create_tasks(
+        self,
+        save_tasks: bool = False,
+        custom_composed_tasks: Optional[list[ComposedTask]] = None,
+    ) -> list[Task]:
+        if custom_composed_tasks is not None:
+            composed_tasks = custom_composed_tasks
+        else:
+            composed_tasks = compose_tasks(self.selection_sets, self.task_validator)
         composed_tasks = sorted(composed_tasks, key=lambda x: len(x.composed_from))
         print(f"Number of composed tasks: {len(composed_tasks)}")
         persona_options = list(PERSONAS.keys())
@@ -219,7 +243,11 @@ class TaskManager:
         return tasks
 
     def run_assertions(
-        self, env: HealthcareEnvironment, task: Task, verbose: bool = False, skip_behavioral: bool = False
+        self,
+        env: HealthcareEnvironment,
+        task: Task,
+        verbose: bool = False,
+        skip_behavioral: bool = False,
     ):
         if task.evaluation_criteria is None:
             return True
@@ -230,9 +258,14 @@ class TaskManager:
         for i, assertion in enumerate(assertions):
             # Skip behavioral assertions (tool call history checks) during task verification
             # These require full conversation trajectories and will be verified during evaluation
-            if skip_behavioral and assertion.func_name in ["assert_tool_was_called", "assert_tool_was_not_called"]:
+            if skip_behavioral and assertion.func_name in [
+                "assert_tool_was_called",
+                "assert_tool_was_not_called",
+            ]:
                 if verbose:
-                    print(f"Skipping behavioral assertion {i + 1} of {len(assertions)} (will be verified during evaluation)")
+                    print(
+                        f"Skipping behavioral assertion {i + 1} of {len(assertions)} (will be verified during evaluation)"
+                    )
                     print(textwrap.indent(str(assertion), "  "))
                 continue
 
@@ -249,12 +282,11 @@ class TaskManager:
         return success
 
     def _is_fixable(self, task: Task) -> bool:
-        # Tasks requiring transfer to nurse or human are not fixable by the agent
         transfer_action_names = {"transfer_to_human_agent", "transfer_to_nurse"}
         if task.evaluation_criteria is None:
             return True
         action_names = {a.name for a in task.evaluation_criteria.actions or []}
-        if action_names & transfer_action_names:  # Check for any overlap
+        if action_names & transfer_action_names:
             return False
         return True
 
@@ -263,10 +295,11 @@ class TaskManager:
 
         print("Verifying task: ", task.id)
 
-        healthcare_env = cast(HealthcareEnvironment, registry.get_env_constructor("healthcare")())
+        healthcare_env = cast(
+            HealthcareEnvironment, registry.get_env_constructor("healthcare")()
+        )
         assert self.is_fixed(healthcare_env), "Healthcare env starts in broken state"
 
-        # Handle None initial_state
         initialization_data = None
         initialization_actions = None
         if task.initial_state is not None:
@@ -279,7 +312,6 @@ class TaskManager:
             message_history=[],
         )
 
-        # Handle None evaluation_criteria
         fix_actions = []
         if task.evaluation_criteria is not None:
             fix_actions = task.evaluation_criteria.actions or []
@@ -301,4 +333,6 @@ class TaskManager:
             assert not self.is_fixed(healthcare_env), (
                 f"Task {task.id} is fixed but should not be. {task}"
             )
-        assert self.run_assertions(healthcare_env, task, verbose=True, skip_behavioral=True)
+        assert self.run_assertions(
+            healthcare_env, task, verbose=True, skip_behavioral=True
+        )

@@ -47,8 +47,15 @@
           "route": "oral",
           "prescribed_date": "2024-02-15",
           "indication": "Hypertension management",
-          "interactions": ["Potassium supplements", "NSAIDs"],
-          "side_effects": ["Dry cough", "Dizziness", "Headache"]
+          "interactions": [
+            "Potassium supplements",
+            "NSAIDs"
+          ],
+          "side_effects": [
+            "Dry cough",
+            "Dizziness",
+            "Headache"
+          ]
         },
         {
           "medication_id": "med_002",
@@ -59,8 +66,54 @@
           "route": "oral",
           "prescribed_date": "2024-02-15",
           "indication": "Type 2 Diabetes management",
-          "interactions": ["Alcohol", "Contrast dye"],
-          "side_effects": ["Nausea", "Diarrhea", "Metallic taste"]
+          "interactions": [
+            "Alcohol",
+            "Contrast dye"
+          ],
+          "side_effects": [
+            "Nausea",
+            "Diarrhea",
+            "Metallic taste"
+          ]
+        },
+        {
+          "medication_id": "med_003",
+          "name": "Atorvastatin",
+          "generic_name": "Atorvastatin",
+          "dosage": "20mg",
+          "frequency": "once daily at bedtime",
+          "route": "oral",
+          "prescribed_date": "2024-03-01",
+          "indication": "Hyperlipidemia management",
+          "interactions": [
+            "Grapefruit juice",
+            "Gemfibrozil",
+            "Cyclosporine"
+          ],
+          "side_effects": [
+            "Muscle pain",
+            "Liver enzyme elevation",
+            "Headache"
+          ]
+        },
+        {
+          "medication_id": "med_006",
+          "name": "Amlodipine",
+          "generic_name": "Amlodipine Besylate",
+          "dosage": "5mg",
+          "frequency": "once daily",
+          "route": "oral",
+          "prescribed_date": "2024-02-20",
+          "indication": "Hypertension",
+          "interactions": [
+            "Simvastatin",
+            "Grapefruit juice"
+          ],
+          "side_effects": [
+            "Ankle swelling",
+            "Flushing",
+            "Dizziness"
+          ]
         }
       ],
       "allergies_detailed": [
@@ -95,9 +148,7 @@
           "height": 165.0
         }
       ],
-      "appointment_ids": [
-        "appt_001"
-      ],
+      "appointment_ids": [],
       "prescription_ids": [
         "rx_001",
         "rx_002"
@@ -109,7 +160,10 @@
       "last_consultation_date": "2024-05-10",
       "last_hba1c_date": "2024-05-10",
       "last_lipid_panel_date": "2024-02-15",
-      "high_risk_conditions": ["diabetes", "hypertension"],
+      "high_risk_conditions": [
+        "diabetes",
+        "hypertension"
+      ],
       "needs_urgent_follow_up": false
     },
     "patient_002": {
@@ -131,7 +185,9 @@
         "copay_amount": 25,
         "coverage_details": "Covers routine and specialist visits, limited urgent care coverage"
       },
-      "appointment_ids": [],
+      "appointment_ids": [
+        "appt_001"
+      ],
       "prescription_ids": []
     },
     "patient_003": {
@@ -223,18 +279,162 @@
         "14:00",
         "15:00"
       ]
+    },
+    "doc_004": {
+      "doctor_id": "doc_004",
+      "name": {
+        "first_name": "Patricia",
+        "last_name": "Anderson"
+      },
+      "specialty": "Endocrinology",
+      "available_days": [
+        "Monday",
+        "Wednesday",
+        "Friday"
+      ],
+      "available_times": [
+        "09:00",
+        "10:00",
+        "11:00",
+        "13:00",
+        "14:00"
+      ]
+    },
+    "doc_005": {
+      "doctor_id": "doc_005",
+      "name": {
+        "first_name": "James",
+        "last_name": "Thompson"
+      },
+      "specialty": "Pulmonology",
+      "available_days": [
+        "Tuesday",
+        "Thursday",
+        "Friday"
+      ],
+      "available_times": [
+        "10:00",
+        "11:00",
+        "14:00",
+        "15:00"
+      ]
+    },
+    "doc_006": {
+      "doctor_id": "doc_006",
+      "name": {
+        "first_name": "Maria",
+        "last_name": "Garcia"
+      },
+      "specialty": "Internal Medicine",
+      "available_days": [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday"
+      ],
+      "available_times": [
+        "08:00",
+        "09:00",
+        "10:00",
+        "11:00",
+        "13:00",
+        "14:00",
+        "15:00",
+        "16:00"
+      ]
+    },
+    "doc_007": {
+      "doctor_id": "doc_007",
+      "name": {
+        "first_name": "William",
+        "last_name": "Davis"
+      },
+      "specialty": "Nephrology",
+      "available_days": [
+        "Monday",
+        "Wednesday"
+      ],
+      "available_times": [
+        "09:00",
+        "10:00",
+        "14:00",
+        "15:00"
+      ]
+    },
+    "doc_008": {
+      "doctor_id": "doc_008",
+      "name": {
+        "first_name": "Jennifer",
+        "last_name": "Brown"
+      },
+      "specialty": "General Practice",
+      "available_days": [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday"
+      ],
+      "available_times": [
+        "08:30",
+        "09:30",
+        "10:30",
+        "13:30",
+        "14:30",
+        "15:30"
+      ]
+    },
+    "doc_009": {
+      "doctor_id": "doc_009",
+      "name": {
+        "first_name": "Michael",
+        "last_name": "Wilson"
+      },
+      "specialty": "Cardiology",
+      "available_days": [
+        "Tuesday",
+        "Thursday",
+        "Friday"
+      ],
+      "available_times": [
+        "09:00",
+        "10:00",
+        "11:00",
+        "14:00",
+        "15:00",
+        "16:00"
+      ]
+    },
+    "doc_010": {
+      "doctor_id": "doc_010",
+      "name": {
+        "first_name": "Susan",
+        "last_name": "Miller"
+      },
+      "specialty": "Rheumatology",
+      "available_days": [
+        "Wednesday",
+        "Thursday"
+      ],
+      "available_times": [
+        "10:00",
+        "11:00",
+        "13:00",
+        "14:00"
+      ]
     }
   },
   "appointments": {
     "appt_001": {
       "appointment_id": "appt_001",
-      "patient_id": "patient_001",
-      "doctor_id": "doc_001",
-      "appointment_type": "follow_up",
-      "date": "2024-05-20",
+      "patient_id": "patient_002",
+      "doctor_id": "doc_003",
+      "appointment_type": "routine_checkup",
+      "date": "2024-05-22",
       "time": "10:00",
       "status": "scheduled",
-      "reason": "Follow-up for diabetes management",
+      "reason": "Annual checkup",
       "notes": null,
       "created_at": "2024-05-10T14:30:00",
       "cost": 100
